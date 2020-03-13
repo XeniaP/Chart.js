@@ -1,28 +1,26 @@
-'use strict';
+import DatasetController from '../core/core.datasetController';
+import defaults from '../core/core.defaults';
+import {Point} from '../elements/index';
+import {resolve} from '../helpers/helpers.options';
 
-var DatasetController = require('../core/core.datasetController');
-var defaults = require('../core/core.defaults');
-var elements = require('../elements/index');
-var helpers = require('../helpers/index');
-
-var valueOrDefault = helpers.valueOrDefault;
-var resolve = helpers.options.resolve;
-
-defaults._set('bubble', {
+defaults.set('bubble', {
+	animation: {
+		numbers: {
+			properties: ['x', 'y', 'borderWidth', 'radius']
+		}
+	},
 	scales: {
 		x: {
-			type: 'linear',
-			position: 'bottom'
+			type: 'linear'
 		},
 		y: {
-			type: 'linear',
-			position: 'left'
+			type: 'linear'
 		}
 	},
 
 	tooltips: {
 		callbacks: {
-			title: function() {
+			title() {
 				// Title doesn't make sense for scatter since we format the data as a point
 				return '';
 			}
@@ -30,172 +28,132 @@ defaults._set('bubble', {
 	}
 });
 
-module.exports = DatasetController.extend({
-	/**
-	 * @protected
-	 */
-	dataElementType: elements.Point,
-
-	/**
-	 * @private
-	 */
-	_dataElementOptions: [
-		'backgroundColor',
-		'borderColor',
-		'borderWidth',
-		'hoverBackgroundColor',
-		'hoverBorderColor',
-		'hoverBorderWidth',
-		'hoverRadius',
-		'hitRadius',
-		'pointStyle',
-		'rotation'
-	],
+export default class BubbleController extends DatasetController {
 
 	/**
 	 * Parse array of objects
-	 * @private
+	 * @protected
 	 */
-	_parseObjectData: function(meta, data, start, count) {
+	parseObjectData(meta, data, start, count) {
 		const {xScale, yScale} = meta;
-		const xId = xScale.id;
-		const yId = yScale.id;
 		const parsed = [];
 		let i, ilen, item;
 		for (i = start, ilen = start + count; i < ilen; ++i) {
 			item = data[i];
 			parsed.push({
-				[xId]: xScale._parseObject(item, 'x', i),
-				[yId]: yScale._parseObject(item, 'y', i),
+				x: xScale.parseObject(item, 'x', i),
+				y: yScale.parseObject(item, 'y', i),
 				_custom: item && item.r && +item.r
 			});
 		}
 		return parsed;
-	},
+	}
 
 	/**
-	 * @private
+	 * @protected
 	 */
-	_getMaxOverflow: function() {
-		var me = this;
-		var meta = me._cachedMeta;
-		var data = meta.data || [];
-		if (!data.length) {
-			return false;
+	getMaxOverflow() {
+		const me = this;
+		const meta = me._cachedMeta;
+		let i = (meta.data || []).length - 1;
+		let max = 0;
+		for (; i >= 0; --i) {
+			max = Math.max(max, me.getStyle(i, true).radius);
 		}
-		var firstPoint = data[0].size();
-		var lastPoint = data[data.length - 1].size();
-		return Math.max(firstPoint, lastPoint) / 2;
-	},
+		return max > 0 && max;
+	}
 
 	/**
-	 * @private
+	 * @protected
 	 */
-	_getLabelAndValue: function(index) {
+	getLabelAndValue(index) {
 		const me = this;
 		const meta = me._cachedMeta;
 		const {xScale, yScale} = meta;
-		const parsed = me._getParsed(index);
-		const x = xScale.getLabelForValue(parsed[xScale.id]);
-		const y = yScale.getLabelForValue(parsed[yScale.id]);
+		const parsed = me.getParsed(index);
+		const x = xScale.getLabelForValue(parsed.x);
+		const y = yScale.getLabelForValue(parsed.y);
 		const r = parsed._custom;
 
 		return {
 			label: meta.label,
 			value: '(' + x + ', ' + y + (r ? ', ' + r : '') + ')'
 		};
-	},
+	}
 
-	/**
-	 * @protected
-	 */
-	update: function(reset) {
+	update(mode) {
 		const me = this;
 		const points = me._cachedMeta.data;
 
 		// Update Points
-		me.updateElements(points, 0, points.length, reset);
-	},
+		me.updateElements(points, 0, mode);
+	}
 
-	/**
-	 * @protected
-	 */
-	updateElements: function(points, start, count, reset) {
+	updateElements(points, start, mode) {
 		const me = this;
+		const reset = mode === 'reset';
 		const {xScale, yScale} = me._cachedMeta;
-		let i;
+		const firstOpts = me.resolveDataElementOptions(start, mode);
+		const sharedOptions = me.getSharedOptions(mode, points[start], firstOpts);
+		const includeOptions = me.includeOptions(mode, sharedOptions);
 
-		for (i = start; i < start + count; i++) {
+		for (let i = 0; i < points.length; i++) {
 			const point = points[i];
-			const options = me._resolveDataElementOptions(i);
-			const parsed = !reset && me._getParsed(i);
-			const x = reset ? xScale.getPixelForDecimal(0.5) : xScale.getPixelForValue(parsed[xScale.id]);
-			const y = reset ? yScale.getBasePixel() : yScale.getPixelForValue(parsed[yScale.id]);
-
-			point._options = options;
-			point._model = {
-				backgroundColor: options.backgroundColor,
-				borderColor: options.borderColor,
-				borderWidth: options.borderWidth,
-				hitRadius: options.hitRadius,
-				pointStyle: options.pointStyle,
-				rotation: options.rotation,
-				radius: reset ? 0 : options.radius,
-				skip: isNaN(x) || isNaN(y),
-				x: x,
-				y: y,
+			const index = start + i;
+			const parsed = !reset && me.getParsed(index);
+			const x = reset ? xScale.getPixelForDecimal(0.5) : xScale.getPixelForValue(parsed.x);
+			const y = reset ? yScale.getBasePixel() : yScale.getPixelForValue(parsed.y);
+			const properties = {
+				x,
+				y,
+				skip: isNaN(x) || isNaN(y)
 			};
 
-			point.pivot(me.chart._animationsDisabled);
+			if (includeOptions) {
+				properties.options = me.resolveDataElementOptions(i, mode);
+
+				if (reset) {
+					properties.options.radius = 0;
+				}
+			}
+
+			me.updateElement(point, index, properties, mode);
 		}
-	},
+
+		me.updateSharedOptions(sharedOptions, mode);
+	}
 
 	/**
+	 * @param {number} index
+	 * @param {string} [mode]
 	 * @protected
 	 */
-	setHoverStyle: function(point) {
-		var model = point._model;
-		var options = point._options;
-		var getHoverColor = helpers.getHoverColor;
-
-		point.$previousStyle = {
-			backgroundColor: model.backgroundColor,
-			borderColor: model.borderColor,
-			borderWidth: model.borderWidth,
-			radius: model.radius
-		};
-
-		model.backgroundColor = valueOrDefault(options.hoverBackgroundColor, getHoverColor(options.backgroundColor));
-		model.borderColor = valueOrDefault(options.hoverBorderColor, getHoverColor(options.borderColor));
-		model.borderWidth = valueOrDefault(options.hoverBorderWidth, options.borderWidth);
-		model.radius = options.radius + options.hoverRadius;
-	},
-
-	/**
-	 * @private
-	 */
-	_resolveDataElementOptions: function(index) {
-		var me = this;
-		var chart = me.chart;
-		var dataset = me.getDataset();
-		var parsed = me._getParsed(index);
-		var values = DatasetController.prototype._resolveDataElementOptions.apply(me, arguments);
+	resolveDataElementOptions(index, mode) {
+		const me = this;
+		const chart = me.chart;
+		const dataset = me.getDataset();
+		const parsed = me.getParsed(index);
+		let values = super.resolveDataElementOptions(index, mode);
 
 		// Scriptable options
-		var context = {
-			chart: chart,
+		const context = {
+			chart,
 			dataIndex: index,
-			dataset: dataset,
+			dataset,
 			datasetIndex: me.index
 		};
 
 		// In case values were cached (and thus frozen), we need to clone the values
-		if (me._cachedDataOpts === values) {
-			values = helpers.extend({}, values);
+		if (values.$shared) {
+			values = Object.assign({}, values, {$shared: false});
 		}
 
+
 		// Custom radius resolution
-		values.radius = resolve([
+		if (mode !== 'active') {
+			values.radius = 0;
+		}
+		values.radius += resolve([
 			parsed && parsed._custom,
 			me._config.radius,
 			chart.options.elements.point.radius
@@ -203,4 +161,16 @@ module.exports = DatasetController.extend({
 
 		return values;
 	}
-});
+}
+
+BubbleController.prototype.dataElementType = Point;
+
+BubbleController.prototype.dataElementOptions = [
+	'backgroundColor',
+	'borderColor',
+	'borderWidth',
+	'hitRadius',
+	'radius',
+	'pointStyle',
+	'rotation'
+];

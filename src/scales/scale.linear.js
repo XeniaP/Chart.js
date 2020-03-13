@@ -1,30 +1,32 @@
-'use strict';
-
-import helpers from '../helpers/index';
+import {isFinite, valueOrDefault} from '../helpers/helpers.core';
+import {_parseFont} from '../helpers/helpers.options';
 import LinearScaleBase from './scale.linearbase';
 import Ticks from '../core/core.ticks';
 
 const defaultConfig = {
-	position: 'left',
 	ticks: {
-		callback: Ticks.formatters.linear
+		callback: Ticks.formatters.numeric
 	}
 };
 
-class LinearScale extends LinearScaleBase {
-	determineDataLimits() {
-		var me = this;
-		var DEFAULT_MIN = 0;
-		var DEFAULT_MAX = 1;
-		var minmax = me._getMinMax(true);
-		var min = minmax.min;
-		var max = minmax.max;
+export default class LinearScale extends LinearScaleBase {
 
-		me.min = helpers.isFinite(min) && !isNaN(min) ? min : DEFAULT_MIN;
-		me.max = helpers.isFinite(max) && !isNaN(max) ? max : DEFAULT_MAX;
+	static id = 'linear';
+	// INTERNAL: static default options, registered in src/index.js
+	static defaults = defaultConfig;
+
+	determineDataLimits() {
+		const me = this;
+		const options = me.options;
+		const minmax = me.getMinMax(true);
+		const min = minmax.min;
+		const max = minmax.max;
+
+		me.min = isFinite(min) ? min : valueOrDefault(options.suggestedMin, 0);
+		me.max = isFinite(max) ? max : valueOrDefault(options.suggestedMax, 1);
 
 		// Backward compatible inconsistent min for stacked
-		if (me.options.stacked && min > 0) {
+		if (options.stacked && min > 0) {
 			me.min = 0;
 		}
 
@@ -32,30 +34,32 @@ class LinearScale extends LinearScaleBase {
 		me.handleTickRangeOptions();
 	}
 
-	// Returns the maximum number of ticks based on the scale dimension
-	_computeTickLimit() {
-		var me = this;
-		var tickFont;
+	/**
+	 * Returns the maximum number of ticks based on the scale dimension
+	 * @protected
+ 	 */
+	computeTickLimit() {
+		const me = this;
 
 		if (me.isHorizontal()) {
 			return Math.ceil(me.width / 40);
 		}
-		tickFont = helpers.options._parseFont(me.options.ticks);
+		const tickFont = _parseFont(me.options.ticks);
 		return Math.ceil(me.height / tickFont.lineHeight);
 	}
 
 	/**
 	 * Called after the ticks are built
-	 * @private
+	 * @protected
 	 */
-	_handleDirectionalChanges(ticks) {
+	handleDirectionalChanges(ticks) {
 		// If we are in a vertical orientation the top value is the highest so reverse the array
 		return this.isHorizontal() ? ticks : ticks.reverse();
 	}
 
 	// Utils
 	getPixelForValue(value) {
-		var me = this;
+		const me = this;
 		return me.getPixelForDecimal((value - me._startValue) / me._valueRange);
 	}
 
@@ -64,14 +68,10 @@ class LinearScale extends LinearScaleBase {
 	}
 
 	getPixelForTick(index) {
-		var ticks = this._tickValues;
+		const ticks = this.ticks;
 		if (index < 0 || index > ticks.length - 1) {
 			return null;
 		}
-		return this.getPixelForValue(ticks[index]);
+		return this.getPixelForValue(ticks[index].value);
 	}
 }
-
-// INTERNAL: static default options, registered in src/index.js
-LinearScale._defaults = defaultConfig;
-export default LinearScale;

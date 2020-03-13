@@ -25,7 +25,6 @@ describe('Linear Scale', function() {
 				borderDash: [],
 				borderDashOffset: 0.0
 			},
-			position: 'left',
 			offset: false,
 			reverse: false,
 			beginAtZero: false,
@@ -42,6 +41,8 @@ describe('Linear Scale', function() {
 				labelOffset: 0,
 				minor: {},
 				major: {},
+				lineWidth: 0,
+				strokeStyle: '',
 			}
 		});
 
@@ -142,6 +143,27 @@ describe('Linear Scale', function() {
 		expect(chart.scales.y.max).toBe(15);
 	});
 
+	it('Should correctly determine the max & min when no datasets are associated and suggested minimum and maximum are set', function() {
+		var chart = window.acquireChart({
+			type: 'bar',
+			data: {
+				datasets: []
+			},
+			options: {
+				scales: {
+					y: {
+						type: 'linear',
+						suggestedMin: -10,
+						suggestedMax: 0
+					}
+				}
+			}
+		});
+
+		expect(chart.scales.y.min).toBe(-10);
+		expect(chart.scales.y.max).toBe(0);
+	});
+
 	it('Should correctly determine the max & min data values ignoring hidden datasets', function() {
 		var chart = window.acquireChart({
 			type: 'bar',
@@ -190,7 +212,8 @@ describe('Linear Scale', function() {
 			options: {
 				scales: {
 					y: {
-						type: 'linear'
+						type: 'linear',
+						beginAtZero: false
 					}
 				}
 			}
@@ -309,7 +332,7 @@ describe('Linear Scale', function() {
 		});
 		chart.update();
 
-		expect(chart.scales.y.getLabelForValue(7)).toBe(7);
+		expect(chart.scales.y.getLabelForValue(7)).toBe('7');
 	});
 
 	it('Should correctly determine the min and max data values when stacked mode is turned on', function() {
@@ -518,8 +541,8 @@ describe('Linear Scale', function() {
 		expect(chart.scales.y.min).toBe(-1010);
 		expect(chart.scales.y.max).toBe(1010);
 		var labels = getLabels(chart.scales.y);
-		expect(labels[0]).toBe('1010');
-		expect(labels[labels.length - 1]).toBe('-1010');
+		expect(labels[0]).toBe('1,010');
+		expect(labels[labels.length - 1]).toBe('-1,010');
 	});
 
 	it('Should use min, max and stepSize to create fixed spaced ticks', function() {
@@ -549,7 +572,7 @@ describe('Linear Scale', function() {
 		expect(chart.scales.y).not.toEqual(undefined); // must construct
 		expect(chart.scales.y.min).toBe(1);
 		expect(chart.scales.y.max).toBe(11);
-		expect(getLabels(chart.scales.y)).toEqual(['11', '10', '8', '6', '4', '2', '1']);
+		expect(getLabels(chart.scales.y)).toEqual(['11', '9', '7', '5', '3', '1']);
 	});
 
 	it('Should create decimal steps if stepSize is a decimal number', function() {
@@ -653,6 +676,7 @@ describe('Linear Scale', function() {
 				scales: {
 					y: {
 						type: 'linear',
+						beginAtZero: false
 					}
 				}
 			}
@@ -731,7 +755,9 @@ describe('Linear Scale', function() {
 			},
 			options: {
 				scales: {
-					y: {}
+					y: {
+						beginAtZero: false
+					}
 				}
 			}
 		});
@@ -762,7 +788,7 @@ describe('Linear Scale', function() {
 		chart.options.scales.y.max = 2.8;
 		chart.update();
 
-		expect(getLabels(chart.scales.y)).toEqual(['2.8', '2.5', '2.0', '1.5', '1.0', '0.5', '0.3']);
+		expect(getLabels(chart.scales.y)).toEqual(['2.8', '2.3', '1.8', '1.3', '0.8', '0.3']);
 	});
 
 	it('Should build labels using the user supplied callback', function() {

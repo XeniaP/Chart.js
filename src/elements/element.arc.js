@@ -1,28 +1,20 @@
-'use strict';
-
 import defaults from '../core/core.defaults';
 import Element from '../core/core.element';
-import helpers from '../helpers';
+import {_angleBetween, getAngleFromPoint} from '../helpers/helpers.math';
 const TAU = Math.PI * 2;
 
-defaults._set('global', {
-	elements: {
-		arc: {
-			backgroundColor: defaults.global.defaultColor,
-			borderColor: '#fff',
-			borderWidth: 2,
-			borderAlign: 'center'
-		}
+defaults.set('elements', {
+	arc: {
+		backgroundColor: defaults.color,
+		borderAlign: 'center',
+		borderColor: '#fff',
+		borderWidth: 2
 	}
 });
 
 function clipArc(ctx, arc) {
-	var startAngle = arc.startAngle;
-	var endAngle = arc.endAngle;
-	var pixelMargin = arc.pixelMargin;
-	var angleMargin = pixelMargin / arc.outerRadius;
-	var x = arc.x;
-	var y = arc.y;
+	const {startAngle, endAngle, pixelMargin, x, y} = arc;
+	let angleMargin = pixelMargin / arc.outerRadius;
 
 	// Draw an inner border by cliping the arc and drawing a double-width border
 	// Enlarge the clipping arc by 0.33 pixels to eliminate glitches between borders
@@ -39,8 +31,8 @@ function clipArc(ctx, arc) {
 }
 
 function drawFullCircleBorders(ctx, vm, arc, inner) {
-	var endAngle = arc.endAngle;
-	var i;
+	const endAngle = arc.endAngle;
+	let i;
 
 	if (inner) {
 		arc.endAngle = arc.startAngle + TAU;
@@ -66,13 +58,14 @@ function drawFullCircleBorders(ctx, vm, arc, inner) {
 }
 
 function drawBorder(ctx, vm, arc) {
-	var inner = vm.borderAlign === 'inner';
+	const options = vm.options;
+	const inner = options.borderAlign === 'inner';
 
 	if (inner) {
-		ctx.lineWidth = vm.borderWidth * 2;
+		ctx.lineWidth = options.borderWidth * 2;
 		ctx.lineJoin = 'round';
 	} else {
-		ctx.lineWidth = vm.borderWidth;
+		ctx.lineWidth = options.borderWidth;
 		ctx.lineJoin = 'bevel';
 	}
 
@@ -91,82 +84,93 @@ function drawBorder(ctx, vm, arc) {
 	ctx.stroke();
 }
 
-class Arc extends Element {
+export default class Arc extends Element {
 
-	constructor(props) {
-		super(props);
-	}
+	static _type = 'arc';
 
-	inRange(chartX, chartY) {
-		var vm = this._view;
+	constructor(cfg) {
+		super();
 
-		if (vm) {
-			var pointRelativePosition = helpers.getAngleFromPoint(vm, {x: chartX, y: chartY});
-			var angle = pointRelativePosition.angle;
-			var distance = pointRelativePosition.distance;
+		this.options = undefined;
+		this.circumference = undefined;
+		this.startAngle = undefined;
+		this.endAngle = undefined;
+		this.innerRadius = undefined;
+		this.outerRadius = undefined;
 
-			// Sanitise angle range
-			var startAngle = vm.startAngle;
-			var endAngle = vm.endAngle;
-			while (endAngle < startAngle) {
-				endAngle += TAU;
-			}
-			while (angle > endAngle) {
-				angle -= TAU;
-			}
-			while (angle < startAngle) {
-				angle += TAU;
-			}
-
-			// Check if within the range of the open/close angle
-			var betweenAngles = (angle >= startAngle && angle <= endAngle);
-			var withinRadius = (distance >= vm.innerRadius && distance <= vm.outerRadius);
-
-			return (betweenAngles && withinRadius);
+		if (cfg) {
+			Object.assign(this, cfg);
 		}
-		return false;
 	}
 
-	getCenterPoint() {
-		var vm = this._view;
-		var halfAngle = (vm.startAngle + vm.endAngle) / 2;
-		var halfRadius = (vm.innerRadius + vm.outerRadius) / 2;
+	/**
+	 * @param {number} chartX
+	 * @param {number} chartY
+	 * @param {boolean} [useFinalPosition]
+	 */
+	inRange(chartX, chartY, useFinalPosition) {
+		const point = this.getProps(['x', 'y'], useFinalPosition);
+		const {angle, distance} = getAngleFromPoint(point, {x: chartX, y: chartY});
+		const {startAngle, endAngle, innerRadius, outerRadius, circumference} = this.getProps([
+			'startAngle',
+			'endAngle',
+			'innerRadius',
+			'outerRadius',
+			'circumference'
+		], useFinalPosition);
+		const betweenAngles = circumference >= TAU || _angleBetween(angle, startAngle, endAngle);
+		const withinRadius = (distance >= innerRadius && distance <= outerRadius);
+
+		return (betweenAngles && withinRadius);
+	}
+
+	/**
+	 * @param {boolean} [useFinalPosition]
+	 */
+	getCenterPoint(useFinalPosition) {
+		const {x, y, startAngle, endAngle, innerRadius, outerRadius} = this.getProps([
+			'x',
+			'y',
+			'startAngle',
+			'endAngle',
+			'innerRadius',
+			'outerRadius'
+		], useFinalPosition);
+		const halfAngle = (startAngle + endAngle) / 2;
+		const halfRadius = (innerRadius + outerRadius) / 2;
 		return {
-			x: vm.x + Math.cos(halfAngle) * halfRadius,
-			y: vm.y + Math.sin(halfAngle) * halfRadius
+			x: x + Math.cos(halfAngle) * halfRadius,
+			y: y + Math.sin(halfAngle) * halfRadius
 		};
 	}
 
-	tooltipPosition() {
-		var vm = this._view;
-		var centreAngle = vm.startAngle + ((vm.endAngle - vm.startAngle) / 2);
-		var rangeFromCentre = (vm.outerRadius - vm.innerRadius) / 2 + vm.innerRadius;
-
-		return {
-			x: vm.x + (Math.cos(centreAngle) * rangeFromCentre),
-			y: vm.y + (Math.sin(centreAngle) * rangeFromCentre)
-		};
+	/**
+	 * @param {boolean} [useFinalPosition]
+	 */
+	tooltipPosition(useFinalPosition) {
+		return this.getCenterPoint(useFinalPosition);
 	}
 
 	draw(ctx) {
-		var vm = this._view;
-		var pixelMargin = (vm.borderAlign === 'inner') ? 0.33 : 0;
-		var arc = {
-			x: vm.x,
-			y: vm.y,
-			innerRadius: vm.innerRadius,
-			outerRadius: Math.max(vm.outerRadius - pixelMargin, 0),
-			pixelMargin: pixelMargin,
-			startAngle: vm.startAngle,
-			endAngle: vm.endAngle,
-			fullCircles: Math.floor(vm.circumference / TAU)
+		const me = this;
+		const options = me.options;
+		const pixelMargin = (options.borderAlign === 'inner') ? 0.33 : 0;
+		const arc = {
+			x: me.x,
+			y: me.y,
+			innerRadius: me.innerRadius,
+			outerRadius: Math.max(me.outerRadius - pixelMargin, 0),
+			pixelMargin,
+			startAngle: me.startAngle,
+			endAngle: me.endAngle,
+			fullCircles: Math.floor(me.circumference / TAU)
 		};
-		var i;
+		let i;
 
 		ctx.save();
 
-		ctx.fillStyle = vm.backgroundColor;
-		ctx.strokeStyle = vm.borderColor;
+		ctx.fillStyle = options.backgroundColor;
+		ctx.strokeStyle = options.borderColor;
 
 		if (arc.fullCircles) {
 			arc.endAngle = arc.startAngle + TAU;
@@ -177,7 +181,7 @@ class Arc extends Element {
 			for (i = 0; i < arc.fullCircles; ++i) {
 				ctx.fill();
 			}
-			arc.endAngle = arc.startAngle + vm.circumference % TAU;
+			arc.endAngle = arc.startAngle + me.circumference % TAU;
 		}
 
 		ctx.beginPath();
@@ -186,14 +190,10 @@ class Arc extends Element {
 		ctx.closePath();
 		ctx.fill();
 
-		if (vm.borderWidth) {
-			drawBorder(ctx, vm, arc);
+		if (options.borderWidth) {
+			drawBorder(ctx, me, arc);
 		}
 
 		ctx.restore();
 	}
 }
-
-Arc.prototype._type = 'arc';
-
-export default Arc;

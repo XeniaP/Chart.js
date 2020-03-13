@@ -77,8 +77,8 @@ The line chart allows a number of properties to be specified for each dataset. T
 | [`pointRotation`](#point-styling) | `number` | Yes | Yes | `0`
 | [`pointStyle`](#point-styling) | <code>string&#124;Image</code> | Yes | Yes | `'circle'`
 | [`showLine`](#line-styling) | `boolean` | - | - | `undefined`
-| [`spanGaps`](#line-styling) | `boolean` | - | - | `undefined`
-| [`steppedLine`](#stepped-line) | <code>boolean&#124;string</code> | - | - | `false`
+| [`spanGaps`](#line-styling) | <code>boolean&#124;number</code> | - | - | `undefined`
+| [`stepped`](#stepped) | <code>boolean&#124;string</code> | - | - | `false`
 | [`xAxisID`](#general) | `string` | - | - | first x axis
 | [`yAxisID`](#general) | `string` | - | - | first y axis
 
@@ -88,7 +88,7 @@ The line chart allows a number of properties to be specified for each dataset. T
 | ---- | ----
 | `clip` | How to clip relative to chartArea. Positive value allows overflow, negative value clips that many pixels inside chartArea. `0` = clip at chartArea. Clipping can also be configured per side: `clip: {left: 5, top: false, right: -2, bottom: 0}`
 | `label` | The label for the dataset which appears in the legend and tooltips.
-| `order` | The drawing order of dataset. Also affects order for stacking, tooltip, and legend.
+| `order` | The drawing order of dataset. Also affects order for stacking, tooltip and legend.
 | `xAxisID` | The ID of the x axis to plot this dataset on.
 | `yAxisID` | The ID of the y axis to plot this dataset on.
 
@@ -124,7 +124,7 @@ The style of the line can be controlled with the following properties:
 | `fill` | How to fill the area under the line. See [area charts](area.md).
 | `lineTension` | Bezier curve tension of the line. Set to 0 to draw straightlines. This option is ignored if monotone cubic interpolation is used.
 | `showLine` | If false, the line is not drawn for this dataset.
-| `spanGaps` | If true, lines will be drawn between points with no or null data. If false, points with `NaN` data will create a break in the line.
+| `spanGaps` | If true, lines will be drawn between points with no or null data. If false, points with `NaN` data will create a break in the line. Can also be a number specifying the maximum gap length to span. The unit of the value depends on the scale used.
 
 If the value is `undefined`, `showLine` and `spanGaps` fallback to the associated [chart configuration options](#configuration-options). The rest of the values fallback to the associated [`elements.line.*`](../configuration/elements.md#line-configuration) options.
 
@@ -152,9 +152,9 @@ The `'monotone'` algorithm is more suited to `y = f(x)` datasets : it preserves 
 
 If left untouched (`undefined`), the global `options.elements.line.cubicInterpolationMode` property is used.
 
-### Stepped Line
+### Stepped
 
-The following values are supported for `steppedLine`.
+The following values are supported for `stepped`.
 
 * `false`: No Step Interpolation (default)
 * `true`: Step-before Interpolation (eq. `'before'`)
@@ -162,11 +162,11 @@ The following values are supported for `steppedLine`.
 * `'after'`: Step-after Interpolation
 * `'middle'`: Step-middle Interpolation
 
-If the `steppedLine` value is set to anything other than false, `lineTension` will be ignored.
+If the `stepped` value is set to anything other than false, `lineTension` will be ignored.
 
 ## Configuration Options
 
-The line chart defines the following configuration options. These options are merged with the global chart configuration options, `Chart.defaults.global`, to form the options passed to the chart.
+The line chart defines the following configuration options. These options are merged with the global chart configuration options, `Chart.defaults`, to form the options passed to the chart.
 
 | Name | Type | Default | Description
 | ---- | ---- | ------- | -----------

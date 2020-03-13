@@ -1,43 +1,35 @@
-'use strict';
-
-import defaults from '../core/core.defaults';
-import helpers from '../helpers/index';
+import {isFinite} from '../helpers/helpers.core';
+import {_setMinAndMaxByKey, log10} from '../helpers/helpers.math';
 import Scale from '../core/core.scale';
 import LinearScaleBase from './scale.linearbase';
 import Ticks from '../core/core.ticks';
 
-const valueOrDefault = helpers.valueOrDefault;
-const log10 = helpers.math.log10;
+function isMajor(tickVal) {
+	const remain = tickVal / (Math.pow(10, Math.floor(log10(tickVal))));
+	return remain === 1;
+}
+
+function finiteOrDefault(value, def) {
+	return isFinite(value) ? value : def;
+}
 
 /**
  * Generate a set of logarithmic ticks
  * @param generationOptions the options used to generate the ticks
  * @param dataRange the range of the data
- * @returns {number[]} array of tick values
+ * @returns {object[]} array of tick objects
  */
 function generateTicks(generationOptions, dataRange) {
-	var ticks = [];
-
-	var tickVal = valueOrDefault(generationOptions.min, Math.pow(10, Math.floor(log10(dataRange.min))));
-
-	var endExp = Math.floor(log10(dataRange.max));
-	var endSignificand = Math.ceil(dataRange.max / Math.pow(10, endExp));
-	var exp, significand;
-
-	if (tickVal === 0) {
-		exp = Math.floor(log10(dataRange.minNotZero));
-		significand = Math.floor(dataRange.minNotZero / Math.pow(10, exp));
-
-		ticks.push({value: tickVal});
-		tickVal = significand * Math.pow(10, exp);
-	} else {
-		exp = Math.floor(log10(tickVal));
-		significand = Math.floor(tickVal / Math.pow(10, exp));
-	}
-	var precision = exp < 0 ? Math.pow(10, Math.abs(exp)) : 1;
+	const endExp = Math.floor(log10(dataRange.max));
+	const endSignificand = Math.ceil(dataRange.max / Math.pow(10, endExp));
+	const ticks = [];
+	let tickVal = finiteOrDefault(generationOptions.min, Math.pow(10, Math.floor(log10(dataRange.min))));
+	let exp = Math.floor(log10(tickVal));
+	let significand = Math.floor(tickVal / Math.pow(10, exp));
+	let precision = exp < 0 ? Math.pow(10, Math.abs(exp)) : 1;
 
 	do {
-		ticks.push({value: tickVal});
+		ticks.push({value: tickVal, major: isMajor(tickVal)});
 
 		++significand;
 		if (significand === 10) {
@@ -49,92 +41,100 @@ function generateTicks(generationOptions, dataRange) {
 		tickVal = Math.round(significand * Math.pow(10, exp) * precision) / precision;
 	} while (exp < endExp || (exp === endExp && significand < endSignificand));
 
-	var lastTick = valueOrDefault(generationOptions.max, tickVal);
-	ticks.push({value: lastTick});
+	const lastTick = finiteOrDefault(generationOptions.max, tickVal);
+	ticks.push({value: lastTick, major: isMajor(tickVal)});
 
 	return ticks;
 }
 
 const defaultConfig = {
-	position: 'left',
-
 	// label settings
 	ticks: {
-		callback: Ticks.formatters.logarithmic
+		callback: Ticks.formatters.numeric,
+		major: {
+			enabled: true
+		}
 	}
 };
 
-class LogarithmicScale extends Scale {
-	_parse(raw, index) { // eslint-disable-line no-unused-vars
-		const value = LinearScaleBase.prototype._parse.apply(this, arguments);
-		return helpers.isFinite(value) && value >= 0 ? value : undefined;
+export default class LogarithmicScale extends Scale {
+
+	static id = 'logarithmic';
+	// INTERNAL: static default options, registered in src/index.js
+	static defaults = defaultConfig;
+
+	constructor(cfg) {
+		super(cfg);
+
+		/** @type {number} */
+		this.start = undefined;
+		/** @type {number} */
+		this.end = undefined;
+		/** @type {number} */
+		this._startValue = undefined;
+		this._valueRange = 0;
+	}
+
+	parse(raw, index) {
+		const value = LinearScaleBase.prototype.parse.apply(this, [raw, index]);
+		if (value === 0) {
+			return undefined;
+		}
+		return isFinite(value) && value > 0 ? value : NaN;
 	}
 
 	determineDataLimits() {
-		var me = this;
-		var minmax = me._getMinMax(true);
-		var min = minmax.min;
-		var max = minmax.max;
-		var minPositive = minmax.minPositive;
+		const me = this;
+		const minmax = me.getMinMax(true);
+		const min = minmax.min;
+		const max = minmax.max;
 
-		me.min = helpers.isFinite(min) ? Math.max(0, min) : null;
-		me.max = helpers.isFinite(max) ? Math.max(0, max) : null;
-		me.minNotZero = helpers.isFinite(minPositive) ? minPositive : null;
+		me.min = isFinite(min) ? Math.max(0, min) : null;
+		me.max = isFinite(max) ? Math.max(0, max) : null;
 
 		me.handleTickRangeOptions();
 	}
 
 	handleTickRangeOptions() {
-		var me = this;
-		var DEFAULT_MIN = 1;
-		var DEFAULT_MAX = 10;
-		var min = me.min;
-		var max = me.max;
+		const me = this;
+		const DEFAULT_MIN = 1;
+		const DEFAULT_MAX = 10;
+		let min = me.min;
+		let max = me.max;
 
 		if (min === max) {
-			if (min !== 0 && min !== null) {
-				min = Math.pow(10, Math.floor(log10(min)) - 1);
-				max = Math.pow(10, Math.floor(log10(max)) + 1);
-			} else {
+			if (min <= 0) { // includes null
 				min = DEFAULT_MIN;
 				max = DEFAULT_MAX;
+			} else {
+				min = Math.pow(10, Math.floor(log10(min)) - 1);
+				max = Math.pow(10, Math.floor(log10(max)) + 1);
 			}
 		}
-		if (min === null) {
+		if (min <= 0) {
 			min = Math.pow(10, Math.floor(log10(max)) - 1);
 		}
-		if (max === null) {
-			max = min !== 0
-				? Math.pow(10, Math.floor(log10(min)) + 1)
-				: DEFAULT_MAX;
-		}
-		if (me.minNotZero === null) {
-			if (min > 0) {
-				me.minNotZero = min;
-			} else if (max < 1) {
-				me.minNotZero = Math.pow(10, Math.floor(log10(max)));
-			} else {
-				me.minNotZero = DEFAULT_MIN;
-			}
+		if (max <= 0) {
+			max = Math.pow(10, Math.floor(log10(min)) + 1);
 		}
 		me.min = min;
 		me.max = max;
 	}
 
 	buildTicks() {
-		var me = this;
-		var opts = me.options;
-		var reverse = !me.isHorizontal();
+		const me = this;
+		const opts = me.options;
 
-		var generationOptions = {
+		const generationOptions = {
 			min: me._userMin,
 			max: me._userMax
 		};
-		var ticks = generateTicks(generationOptions, me);
+		const ticks = generateTicks(generationOptions, me);
+		let reverse = !me.isHorizontal();
 
 		// At this point, we need to update our max and min given the tick values since we have expanded the
 		// range of the scale
-		helpers._setMinAndMaxByKey(ticks, me, 'value');
+		_setMinAndMaxByKey(ticks, me, 'value');
 
 		if (opts.reverse) {
 			reverse = !reverse;
@@ -150,69 +150,48 @@ class LogarithmicScale extends Scale {
 		return ticks;
 	}
 
-	generateTickLabels(ticks) {
-		this._tickValues = ticks.map(t => t.value);
-
-		return Scale.prototype.generateTickLabels.call(this, ticks);
+	/**
+	 * @param {number} value
+	 * @return {string}
+	 */
+	getLabelForValue(value) {
+		return value === undefined ? '0' : new Intl.NumberFormat(this.options.locale).format(value);
 	}
 
 	getPixelForTick(index) {
-		var ticks = this._tickValues;
+		const ticks = this.ticks;
 		if (index < 0 || index > ticks.length - 1) {
 			return null;
 		}
-		return this.getPixelForValue(ticks[index]);
+		return this.getPixelForValue(ticks[index].value);
 	}
 
 	/**
-	 * Returns the value of the first tick.
-	 * @param {number} value - The minimum not zero value.
-	 * @return {number} The first tick value.
-	 * @private
+	 * @protected
 	 */
-	_getFirstTickValue(value) {
-		var exp = Math.floor(log10(value));
-		var significand = Math.floor(value / Math.pow(10, exp));
+	configure() {
+		const me = this;
+		const start = me.min;
 
-		return significand * Math.pow(10, exp);
-	}
-
-	_configure() {
-		var me = this;
-		var start = me.min;
-		var offset = 0;
-
-		Scale.prototype._configure.call(me);
-
-		if (start === 0) {
-			start = me._getFirstTickValue(me.minNotZero);
-			offset = valueOrDefault(me.options.ticks.fontSize, defaults.global.defaultFontSize) / me._length;
-		}
+		super.configure();
 
 		me._startValue = log10(start);
-		me._valueOffset = offset;
-		me._valueRange = (log10(me.max) - log10(start)) / (1 - offset);
+		me._valueRange = log10(me.max) - log10(start);
 	}
 
 	getPixelForValue(value) {
-		var me = this;
-		var decimal = 0;
-
-		if (value > me.min && value > 0) {
-			decimal = (log10(value) - me._startValue) / me._valueRange + me._valueOffset;
+		const me = this;
+		if (value === undefined || value === 0) {
+			value = me.min;
 		}
-		return me.getPixelForDecimal(decimal);
+		return me.getPixelForDecimal(value === me.min
+			? 0
+			: (log10(value) - me._startValue) / me._valueRange);
 	}
 
 	getValueForPixel(pixel) {
-		var me = this;
-		var decimal = me.getDecimalForPixel(pixel);
-		return decimal === 0 && me.min === 0
-			? 0
-			: Math.pow(10, me._startValue + (decimal - me._valueOffset) * me._valueRange);
+		const me = this;
+		const decimal = me.getDecimalForPixel(pixel);
+		return Math.pow(10, me._startValue + decimal * me._valueRange);
 	}
 }
-
-// INTERNAL: static default options, registered in src/index.js
-LogarithmicScale._defaults = defaultConfig;
-export default LogarithmicScale;

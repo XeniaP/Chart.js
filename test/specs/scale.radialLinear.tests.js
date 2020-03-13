@@ -63,6 +63,8 @@ describe('Test the radial linear scale', function() {
 				labelOffset: 0,
 				minor: {},
 				major: {},
+				lineWidth: 0,
+				strokeStyle: '',
 			},
 		});
 
@@ -212,7 +214,7 @@ describe('Test the radial linear scale', function() {
 
 		expect(chart.scales.r.min).toBe(-1010);
 		expect(chart.scales.r.max).toBe(1010);
-		expect(getLabels(chart.scales.r)).toEqual(['-1010', '-1000', '-500', '0', '500', '1000', '1010']);
+		expect(getLabels(chart.scales.r)).toEqual(['-1,010', '-1,000', '-500', '0', '500', '1,000', '1,010']);
 	});
 
 	it('should forcibly include 0 in the range if the beginAtZero option is used', function() {
@@ -304,7 +306,7 @@ describe('Test the radial linear scale', function() {
 		chart.options.scales.r.max = 2.8;
 		chart.update();
 
-		expect(getLabels(chart.scales.r)).toEqual(['0.3', '0.5', '1.0', '1.5', '2.0', '2.5', '2.8']);
+		expect(getLabels(chart.scales.r)).toEqual(['0.3', '0.8', '1.3', '1.8', '2.3', '2.8']);
 	});
 
 	it('Should build labels using the user supplied callback', function() {
@@ -412,7 +414,7 @@ describe('Test the radial linear scale', function() {
 				}
 			}
 		});
-		expect(chart.scales.r.getLabelForValue(5)).toBe(5);
+		expect(chart.scales.r.getLabelForValue(5)).toBe('5');
 	});
 
 	it('should get the correct distance from the center point', function() {
@@ -535,7 +537,7 @@ describe('Test the radial linear scale', function() {
 			scale.ctx.getCalls().filter(function(x) {
 				return x.name === 'setTextAlign';
 			}).forEach(function(x, i) {
-				expect(x.args[0]).toBe(expected.textAlign[i]);
+				expect(x.args[0]).withContext('startAngle: ' + expected.startAngle + ', tick: ' + i).toBe(expected.textAlign[i]);
 			});
 
 			scale.ctx.getCalls().filter(function(x) {

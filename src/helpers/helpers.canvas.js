@@ -1,4 +1,8 @@
-'use strict';
+import {isArray} from './helpers.core';
+
+/**
+ * @typedef { import("../core/core.controller").default } Chart
+ */
 
 const PI = Math.PI;
 const RAD_PER_DEG = PI / 180;
@@ -10,6 +14,73 @@ const TWO_THIRDS_PI = PI * 2 / 3;
 /**
  * @namespace Chart.helpers.canvas
  */
+
+/**
+ * @private
+ */
+export function _measureText(ctx, data, gc, longest, string) {
+	let textWidth = data[string];
+	if (!textWidth) {
+		textWidth = data[string] = ctx.measureText(string).width;
+		gc.push(string);
+	}
+	if (textWidth > longest) {
+		longest = textWidth;
+	}
+	return longest;
+}
+
+/**
+ * @private
+ */
+export function _longestText(ctx, font, arrayOfThings, cache) {
+	cache = cache || {};
+	let data = cache.data = cache.data || {};
+	let gc = cache.garbageCollect = cache.garbageCollect || [];
+
+	if (cache.font !== font) {
+		data = cache.data = {};
+		gc = cache.garbageCollect = [];
+		cache.font = font;
+	}
+
+	ctx.save();
+
+	ctx.font = font;
+	let longest = 0;
+	const ilen = arrayOfThings.length;
+	let i, j, jlen, thing, nestedThing;
+	for (i = 0; i < ilen; i++) {
+		thing = arrayOfThings[i];
+
+		// Undefined strings and arrays should not be measured
+		if (thing !== undefined && thing !== null && isArray(thing) !== true) {
+			longest = _measureText(ctx, data, gc, longest, thing);
+		} else if (isArray(thing)) {
+			// if it is an array lets measure each element
+			// to do maybe simplify this function a bit so we can do this more recursively?
+			for (j = 0, jlen = thing.length; j < jlen; j++) {
+				nestedThing = thing[j];
+				// Undefined strings and arrays should not be measured
+				if (nestedThing !== undefined && nestedThing !== null && !isArray(nestedThing)) {
+					longest = _measureText(ctx, data, gc, longest, nestedThing);
+				}
+			}
+		}
+	}
+
+	ctx.restore();
+
+	const gcLen = gc.length / 2;
+	if (gcLen > arrayOfThings.length) {
+		for (i = 0; i < gcLen; i++) {
+			delete data[gc[i]];
+		}
+		gc.splice(0, gcLen);
+	}
+	return longest;
+}
+
 /**
  * Returns the aligned pixel value to avoid anti-aliasing blur
  * @param {Chart} chart - The chart instance.
@@ -32,9 +103,12 @@ export function clear(chart) {
 	chart.ctx.clearRect(0, 0, chart.width, chart.height);
 }
 
-export function drawPoint(ctx, style, radius, x, y, rotation) {
-	var type, xOffset, yOffset, size, cornerRadius;
-	var rad = (rotation || 0) * RAD_PER_DEG;
+export function drawPoint(ctx, options, x, y) {
+	let type, xOffset, yOffset, size, cornerRadius;
+	const style = options.pointStyle;
+	const rotation = options.rotation;
+	const radius = options.radius;
+	let rad = (rotation || 0) * RAD_PER_DEG;
 
 	if (style && typeof style === 'object') {
 		type = style.toString();
@@ -142,7 +216,9 @@ export function drawPoint(ctx, style, radius, x, y, rotation) {
 	}
 
 	ctx.fill();
-	ctx.stroke();
+	if (options.borderWidth > 0) {
+		ctx.stroke();
+	}
 }
 
 /**
@@ -153,7 +229,7 @@ export function drawPoint(ctx, style, radius, x, y, rotation) {
  * @private
  */
 export function _isPointInArea(point, area) {
-	var epsilon = 1e-6; // 1e-6 is margin in pixels for accumulated error.
+	const epsilon = 0.5; // margin - to match rounded decimals
 
 	return point.x > area.left - epsilon && point.x < area.right + epsilon &&
 		point.y > area.top - epsilon && point.y < area.bottom + epsilon;
@@ -174,11 +250,14 @@ export function unclipArea(ctx) {
  * @private
  */
 export function _steppedLineTo(ctx, previous, target, flip, mode) {
+	if (!previous) {
+		return ctx.lineTo(target.x, target.y);
+	}
 	if (mode === 'middle') {
 		const midpoint = (previous.x + target.x) / 2.0;
-		ctx.lineTo(midpoint, flip ? target.y : previous.y);
-		ctx.lineTo(midpoint, flip ? previous.y : target.y);
-	} else if ((mode === 'after' && !flip) || (mode !== 'after' && flip)) {
+		ctx.lineTo(midpoint, previous.y);
+		ctx.lineTo(midpoint, target.y);
+	} else if (mode === 'after' !== !!flip) {
 		ctx.lineTo(previous.x, target.y);
 	} else {
 		ctx.lineTo(target.x, previous.y);
@@ -190,6 +269,9 @@ export function _steppedLineTo(ctx, previous, target, flip, mode) {
  * @private
  */
 export function _bezierCurveTo(ctx, previous, target, flip) {
+	if (!previous) {
+		return ctx.lineTo(target.x, target.y);
+	}
 	ctx.bezierCurveTo(
 		flip ? previous.controlPointPreviousX : previous.controlPointNextX,
 		flip ? previous.controlPointPreviousY : previous.controlPointNextY,

@@ -81,10 +81,6 @@ For example, to derive a new chart type that extends from a bubble chart, you wo
 // It looks like a bug exists when the defaults don't exist
 Chart.defaults.derivedBubble = Chart.defaults.bubble;
 
-// Sets the default dataset config for 'derivedBubble' to be the same as the bubble dataset defaults.
-// It looks like a bug exists when the dataset defaults don't exist
-Chart.defaults.global.datasets.derivedBubble = Chart.defaults.global.datasets.bubble;
-
 // I think the recommend using Chart.controllers.bubble.extend({ extensions here });
 var custom = Chart.controllers.bubble.extend({
     draw: function(ease) {
@@ -94,13 +90,13 @@ var custom = Chart.controllers.bubble.extend({
         // Now we can do some custom drawing for this dataset. Here we'll draw a red box around the first point in each dataset
         var meta = this.getMeta();
         var pt0 = meta.data[0];
-        var radius = pt0._view.radius;
+        var radius = pt0.radius;
 
         var ctx = this.chart.chart.ctx;
         ctx.save();
         ctx.strokeStyle = 'red';
         ctx.lineWidth = 1;
-        ctx.strokeRect(pt0._view.x - radius, pt0._view.y - radius, 2 * radius, 2 * radius);
+        ctx.strokeRect(pt0.x - radius, pt0.y - radius, 2 * radius, 2 * radius);
         ctx.restore();
     }
 });
